@@ -10,10 +10,44 @@ const Container = styled.div`
   display: flex;
 `;
 
-class App extends React.Component {
-  state = initialData;
+function delay(fn, time = 300) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      fn();
+      resolve();
+    }, time);
+  });
+}
 
-  onDragEnd = (result) => {
+function useMyCoolSensor(api) {
+  const startDrag = React.useCallback(
+    async function start() {
+      const preDrag = api.tryGetLock('column-1');
+      if (!preDrag) {
+        return;
+      }
+
+      const drag = preDrag.snapLift();
+      await delay(drag.moveRight, 0);
+      await delay(drag.drop);
+    },
+    [api]
+  );
+
+  React.useEffect(() => {
+    const button = document.getElementById('startDrag');
+    button.addEventListener('click', startDrag);
+
+    return () => {
+      button.removeEventListener('click', startDrag);
+    };
+  }, [startDrag]);
+}
+
+const App = () => {
+  const [state, setState] = React.useState(initialData);
+
+  const onDragEnd = (result) => {
     const { destination, source, draggableId, type } = result;
 
     if (!destination) {
@@ -28,21 +62,21 @@ class App extends React.Component {
     }
 
     if (type === 'column') {
-      const newColumnOrder = Array.from(this.state.columnOrder);
+      const newColumnOrder = Array.from(state.columnOrder);
       newColumnOrder.splice(source.index, 1);
       newColumnOrder.splice(destination.index, 0, draggableId);
 
       const newState = {
-        ...this.state,
+        ...state,
         columnOrder: newColumnOrder,
       };
 
-      this.setState(newState);
+      setState(newState);
       return;
     }
 
-    const startColumn = this.state.columns[source.droppableId];
-    const finishColumn = this.state.columns[destination.droppableId];
+    const startColumn = state.columns[source.droppableId];
+    const finishColumn = state.columns[destination.droppableId];
 
     if (startColumn === finishColumn) {
       const newTaskIds = Array.from(startColumn.taskIds);
@@ -55,14 +89,14 @@ class App extends React.Component {
       };
 
       const newState = {
-        ...this.state,
+        ...state,
         columns: {
-          ...this.state.columns,
+          ...state.columns,
           [newColumn.id]: newColumn,
         },
       };
 
-      this.setState(newState);
+      setState(newState);
       return;
     }
 
@@ -81,50 +115,43 @@ class App extends React.Component {
     };
 
     const newState = {
-      ...this.state,
+      ...state,
       columns: {
-        ...this.state.columns,
+        ...state.columns,
         [newStartColumn.id]: newStartColumn,
         [newFinishColumn.id]: newFinishColumn,
       },
     };
 
-    this.setState(newState);
+    setState(newState);
     return;
   };
 
-  render() {
-    return (
-      <DragDropContext onDragEnd={this.onDragEnd}>
-        <Droppable
-          droppableId='all-columns'
-          direction='horizontal'
-          type='column'
-        >
-          {(provided) => (
-            <Container {...provided.droppableProps} ref={provided.innerRef}>
-              {this.state.columnOrder.map((columnId, index) => {
-                const column = this.state.columns[columnId];
-                const tasks = column.taskIds.map(
-                  (taskId) => this.state.tasks[taskId]
-                );
+  return (
+    <DragDropContext onDragEnd={onDragEnd} sensors={[useMyCoolSensor]}>
+      <Droppable droppableId='all-columns' direction='horizontal' type='column'>
+        {(provided) => (
+          <Container {...provided.droppableProps} ref={provided.innerRef}>
+            {state.columnOrder.map((columnId, index) => {
+              const column = state.columns[columnId];
+              const tasks = column.taskIds.map((taskId) => state.tasks[taskId]);
 
-                return (
-                  <Column
-                    key={column.id}
-                    column={column}
-                    tasks={tasks}
-                    index={index}
-                  />
-                );
-              })}
-              {provided.placeholder}
-            </Container>
-          )}
-        </Droppable>
-      </DragDropContext>
-    );
-  }
-}
+              return (
+                <Column
+                  key={column.id}
+                  column={column}
+                  tasks={tasks}
+                  index={index}
+                />
+              );
+            })}
+            {provided.placeholder}
+          </Container>
+        )}
+      </Droppable>
+      <button id='startDrag'>Click</button>
+    </DragDropContext>
+  );
+};
 
 ReactDOM.render(<App />, document.getElementById('root'));
